@@ -36,6 +36,8 @@ union ModRM
         ));
     }
     ubyte b;
+
+    alias b this;
 }
 
 static assert(ModRM.sizeof == 1);
@@ -90,7 +92,7 @@ struct CodeBlock
     void add(Register destination, Register source)
     {
         this.emit(0x01);
-        this.emit(ModRM(destination, source).b);
+        this.emit(ModRM(destination, source));
     }
 
     void inc(Register destination)
@@ -100,7 +102,7 @@ struct CodeBlock
             this.emitRexW();
             // inc reg
             this.emit(0xFF);
-            this.emit(ModRM(destination, Register.EAX).b);
+            this.emit(ModRM(destination, Register.EAX));
         }
         else
         {
@@ -119,7 +121,7 @@ struct CodeBlock
     {
         version (X86_64) this.emitRexW();
         this.emit(0x31);
-        this.emit(ModRM(destination, source).b);
+        this.emit(ModRM(destination, source));
     }
 
     // Memory
@@ -140,7 +142,7 @@ struct CodeBlock
         // mov reg, reg
         version (X86_64) this.emitRexW();
         this.emit(0x8B);
-        this.emit(ModRM(destination, source).b);
+        this.emit(ModRM(destination, source));
     }
 
     void mov(Register destination, uint immediate)
