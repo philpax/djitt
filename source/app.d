@@ -48,7 +48,7 @@ struct CodeBlock
     {
         foreach (const relocation; this.labelRelocations_)
         {
-            int offset = this.labels_[relocation.label] - relocation.location;
+            auto offset = cast(int)(this.labels_[relocation.label] - relocation.location);
             assert(offset >= byte.min && offset <= byte.max);
             this.buffer_[relocation.location] = cast(ubyte)offset;
         }
@@ -107,7 +107,6 @@ struct CodeBlock
 
     void xor(Register destination, Register source)
     {
-        version (X86_64) this.emitRexW();
         this.emit(0x31);
         this.emit(ModRM(destination, source));
     }
@@ -128,7 +127,6 @@ struct CodeBlock
     void mov(Register destination, Register source)
     {
         // mov reg, reg
-        version (X86_64) this.emitRexW();
         this.emit(0x8B);
         this.emit(ModRM(destination, source));
     }
