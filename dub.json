@@ -1,0 +1,8 @@
+{
+	"name": "idjit",
+	"description": "An in-memory x86 assembler.",
+	"copyright": "Copyright © 2015, Philpax",
+	"authors": ["Philpax"],
+	"dependencies": {
+	}
+}
