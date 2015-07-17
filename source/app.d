@@ -80,14 +80,6 @@ struct CodeBlock
             this.buffer_ ~= (cast(ubyte*)&val)[i];
     }
 
-    version (X86_64)
-    {
-        void emitRexW()
-        {
-            this.emit(0x48);
-        }
-    }
-
     // Arithmetic
     void add(Register destination, Register source)
     {
@@ -97,18 +89,8 @@ struct CodeBlock
 
     void inc(Register destination)
     {
-        version (X86_64)
-        {
-            this.emitRexW();
-            // inc reg
-            this.emit(0xFF);
-            this.emit(ModRM(destination, Register.EAX));
-        }
-        else
-        {
-            // inc eax -> edi
-            this.emit(0x40 + cast(ubyte)destination);
-        }
+        // inc eax -> edi
+        this.emit(0x40 + cast(ubyte)destination);
     }
 
     void dec(Register destination)
