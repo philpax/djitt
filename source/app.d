@@ -80,6 +80,12 @@ struct CodeBlock
             this.buffer_ ~= (cast(ubyte*)&val)[i];
     }
 
+    void emitRelocation(string name)
+    {
+        this.emit(0x00);
+        this.labelRelocations_ ~= LabelRelocation(this.buffer_.length - 1, name);        
+    }
+
     // Arithmetic
     void add(Register destination, Register source)
     {
@@ -148,15 +154,13 @@ struct CodeBlock
     void jmp(string name)
     {
         this.emit(0xEB);
-        this.emit(0x00);
-        this.labelRelocations_ ~= LabelRelocation(this.buffer_.length - 1, name);
+        this.emitRelocation(name);
     }
 
     void jne(string name)
     {
         this.emit(0x75);
-        this.emit(0x00);
-        this.labelRelocations_ ~= LabelRelocation(this.buffer_.length - 1, name);
+        this.emitRelocation(name);
     }
 
     void label(string name)
