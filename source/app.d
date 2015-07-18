@@ -49,6 +49,11 @@ struct LabelRelocation
     string label;
 }
 
+bool fitsIn(T, Y)(Y value)
+{
+    return value >= T.min && value <= T.max;
+}
+
 struct BasicBlock
 {
     void emit(int b)
@@ -207,7 +212,7 @@ struct Assembly
         foreach (const relocation; this.labelRelocations_)
         {
             int offset = cast(int)(this.labels_[relocation.label] - relocation.location);
-            assert(offset >= byte.min && offset <= byte.max);
+            assert(offset.fitsIn!byte());
             this.buffer_[relocation.location] = cast(ubyte)offset;
         }
 
