@@ -125,6 +125,15 @@ struct BasicBlock
         this.emitImmediate(immediate);
     }
 
+    void cmp(Register source, ubyte immediate)
+    {
+        if (source == Register.EAX)
+        {
+            this.emit(0x3C);
+            this.emit(immediate);
+        }
+    }
+
     void cmp(Register source, uint immediate)
     {
         if (source == Register.EAX)
