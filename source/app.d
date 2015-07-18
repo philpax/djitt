@@ -3,6 +3,7 @@ import std.typecons;
 import std.bitmanip;
 import std.algorithm;
 import std.string;
+import std.array;
 
 enum Register
 {
@@ -42,33 +43,14 @@ union ModRM
 
 static assert(ModRM.sizeof == 1);
 
-struct CodeBlock
+struct LabelRelocation
 {
-    void finalize()
-    {
-        foreach (const relocation; this.labelRelocations_)
-        {
-            auto offset = cast(int)(this.labels_[relocation.label] - relocation.location);
-            assert(offset >= byte.min && offset <= byte.max);
-            this.buffer_[relocation.location] = cast(ubyte)offset;
-        }
+    size_t location;
+    string label;
+}
 
-        version (Windows)
-        {
-            import std.c.windows.windows;
-
-            DWORD old;
-            VirtualProtect(this.buffer_.ptr, this.buffer_.length, 
-                           PAGE_EXECUTE_READWRITE, &old);
-        }
-        else
-        {
-            import core.sys.posix.sys.mman;
-        
-            mprotect(this.buffer_.ptr, this.buffer_.length, PROT_READ|PROT_WRITE|PROT_EXEC);
-        }
-    }
-
+struct BasicBlock
+{
     void emit(int b)
     {
         this.buffer_ ~= cast(ubyte)b;
@@ -155,6 +137,12 @@ struct CodeBlock
         this.emitRelocation(name);
     }
 
+    void je(string name)
+    {
+        this.emit(0x74);
+        this.emitRelocation(name);
+    }
+
     void jne(string name)
     {
         this.emit(0x75);
@@ -177,6 +165,74 @@ struct CodeBlock
         this.buffer_.map!(a => "%.2X".format(a)).join(" ").writeln();
     }
 
+private:
+    ubyte[] buffer_;
+    LabelRelocation[] labelRelocations_;
+    size_t[string] labels_;
+}
+
+struct Assembly
+{
+    this(BasicBlock[] blocks...)
+    {
+        this.blocks_ = blocks.dup;
+    }
+
+    void finalize()
+    {
+        size_t baseAddress = 0;
+
+        // Build up the byte buffer and labels
+        foreach (block; this.blocks_)
+        {
+            // Join block buffer with the assembly's buffer
+            this.buffer_ ~= block.buffer_;
+
+            // Copy the labels to the assembly, offsetting them as we go along
+            foreach (key, value; block.labels_)
+                this.labels_[key] = value + baseAddress;
+
+            // Copy the relocations to the assembly, offseting them as we go along
+            foreach (const relocation; block.labelRelocations_)
+            {
+                this.labelRelocations_ ~= 
+                    LabelRelocation(relocation.location + baseAddress, relocation.label);
+            }
+
+            // Update the new base address
+            baseAddress += block.buffer_.length;
+        }
+
+        // Do relocations
+        foreach (const relocation; this.labelRelocations_)
+        {
+            int offset = cast(int)(this.labels_[relocation.label] - relocation.location);
+            assert(offset >= byte.min && offset <= byte.max);
+            this.buffer_[relocation.location] = cast(ubyte)offset;
+        }
+
+        // Add execution privileges to the memory
+        version (Windows)
+        {
+            import std.c.windows.windows;
+
+            DWORD old;
+            VirtualProtect(this.buffer_.ptr, this.buffer_.length, 
+                           PAGE_EXECUTE_READWRITE, &old);
+        }
+        else
+        {
+            import core.sys.posix.sys.mman;
+        
+            mprotect(this.buffer_.ptr, this.buffer_.length, PROT_READ|PROT_WRITE|PROT_EXEC);
+        }
+    }
+
+    void dump()
+    {
+        this.buffer_.map!(a => "%.2X".format(a)).join(" ").writeln();
+    }
+
     T call(T)()
     {
         extern (C) T function() fn;
@@ -185,36 +241,43 @@ struct CodeBlock
     }
 
 private:
-    struct LabelRelocation
-    {
-        size_t location;
-        string label;
-    }
-
+    BasicBlock[] blocks_;
     ubyte[] buffer_;
-    LabelRelocation[] labelRelocations_;
     size_t[string] labels_;
+    LabelRelocation[] labelRelocations_;
 }
 
 void main()
 {
-    CodeBlock block;
-    
-    with (block)
+    BasicBlock preludeBlock, bodyBlock, endBlock;
+
+    with (preludeBlock)
     {
         push(Register.EBP);
-        mov(Register.ESP, Register.EBP);
+        mov(Register.ESP, Register.EBP);        
+    }
+    
+    with (bodyBlock)
+    {
         xor(Register.EAX, Register.EAX);
         label("LOOP");
         inc(Register.EAX);
+        cmp(Register.EAX, 2);
+        je("EXIT");
         cmp(Register.EAX, 4);
         jne("LOOP");
+    }
+
+    with (endBlock)
+    {
+        label("EXIT");
         pop(Register.EBP);
         ret();
     }
 
-    block.finalize();
-    block.dump();
+    auto assembly = Assembly(preludeBlock, bodyBlock, endBlock);
+    assembly.finalize();
+    assembly.dump();
 
-    writeln(block.call!int());
+    writeln(assembly.call!int());
 }
