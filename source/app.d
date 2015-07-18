@@ -49,6 +49,22 @@ struct LabelRelocation
     string label;
 }
 
+struct GenericRelocation
+{
+    this(size_t location, const(void*) destination)
+    {
+        this.location = location;
+        this.destination = destination;
+
+        // Assume that this instruction ends 4 bytes after the relocation source
+        this.relativeToLocation = this.location + 4;
+    }
+
+    size_t location;
+    size_t relativeToLocation;
+    const(void*) destination;
+}
+
 bool fitsIn(T, Y)(Y value)
 {
     return value >= T.min && value <= T.max;
@@ -67,10 +83,16 @@ struct BasicBlock
             this.buffer_ ~= (cast(ubyte*)&val)[i];
     }
 
-    void emitRelocation(string name)
+    void emitLabelRelocation(string name)
     {
         this.emit(0x00);
         this.labelRelocations_ ~= LabelRelocation(this.buffer_.length - 1, name);        
+    }
+
+    void emitGenericRelocation(void* destination)
+    {
+        this.emitImmediate!uint(0x00);
+        this.genericRelocations_ ~= GenericRelocation(this.buffer_.length - 4, destination);        
     }
 
     // Arithmetic
@@ -78,6 +100,21 @@ struct BasicBlock
     {
         this.emit(0x01);
         this.emit(ModRM(destination, source));
+    }
+
+    void add(Register destination, uint immediate)
+    {
+        if (destination == Register.EAX)
+        {
+            this.emit(0x05);
+            this.emitImmediate(immediate);   
+        }
+        else
+        {
+            this.emit(0x81);
+            this.emit(ModRM(destination, Register.EAX));
+            this.emitImmediate(immediate);
+        }
     }
 
     void inc(Register destination)
@@ -115,7 +152,7 @@ struct BasicBlock
     {
         // mov reg, reg
         this.emit(0x8B);
-        this.emit(ModRM(destination, source));
+        this.emit(ModRM(source, destination));
     }
 
     void mov(Register destination, uint immediate)
@@ -145,22 +182,29 @@ struct BasicBlock
             assert(false);        
     }
 
+    // Control flow
     void jmp(string name)
     {
         this.emit(0xEB);
-        this.emitRelocation(name);
+        this.emitLabelRelocation(name);
     }
 
     void je(string name)
     {
         this.emit(0x74);
-        this.emitRelocation(name);
+        this.emitLabelRelocation(name);
     }
 
     void jne(string name)
     {
         this.emit(0x75);
-        this.emitRelocation(name);
+        this.emitLabelRelocation(name);
+    }
+
+    void call(void* destination)
+    {
+        this.emit(0xE8);
+        this.emitGenericRelocation(destination);
     }
 
     void label(string name)
@@ -168,10 +212,17 @@ struct BasicBlock
         this.labels_[name] = this.buffer_.length - 1;
     }
 
-    // Control flow
     void ret()
     {
         this.emit(0xC3);
+    }
+
+    void int_(ubyte code)
+    {
+        if (code == 3)
+            this.emit(0xCC);
+        else
+            assert(false);
     }
 
     void dump()
@@ -182,6 +233,7 @@ struct BasicBlock
 private:
     ubyte[] buffer_;
     LabelRelocation[] labelRelocations_;
+    GenericRelocation[] genericRelocations_;
     size_t[string] labels_;
 }
 
@@ -213,6 +265,13 @@ struct Assembly
                     LabelRelocation(relocation.location + baseAddress, relocation.label);
             }
 
+            // Copy the relocations to the assembly, offseting them as we go along
+            foreach (const relocation; block.genericRelocations_)
+            {
+                this.genericRelocations_ ~= 
+                    GenericRelocation(relocation.location + baseAddress, relocation.destination);
+            }
+
             // Update the new base address
             baseAddress += block.buffer_.length;
         }
@@ -223,6 +282,13 @@ struct Assembly
             int offset = cast(int)(this.labels_[relocation.label] - relocation.location);
             assert(offset.fitsIn!byte());
             this.buffer_[relocation.location] = cast(ubyte)offset;
+        }
+
+        foreach (const relocation; this.genericRelocations_)
+        {
+            auto location = relocation.location + this.buffer_.ptr + 4;
+            int offset = cast(int)(relocation.destination - location);
+            *cast(int*)&this.buffer_[relocation.location] = offset;
         }
 
         // Add execution privileges to the memory
@@ -259,11 +325,17 @@ private:
     ubyte[] buffer_;
     size_t[string] labels_;
     LabelRelocation[] labelRelocations_;
+    GenericRelocation[] genericRelocations_;
 }
 
 void main()
 {
     BasicBlock preludeBlock, bodyBlock, endBlock;
+
+    extern (C) void c_putchar(int c)
+    {
+        putchar(c);
+    }
 
     with (preludeBlock)
     {
@@ -274,17 +346,27 @@ void main()
     with (bodyBlock)
     {
         xor(Register.EAX, Register.EAX);
+
         label("LOOP");
+        mov(Register.ECX, Register.EAX);
+        add(Register.ECX, 65);
+        push(Register.EAX);
+
+        // Call putchar, and clean up stack
+        push(Register.ECX);
+        call(&c_putchar);
+        add(Register.ESP, 4);
+
+        pop(Register.EAX);
         inc(Register.EAX);
-        cmp(Register.EAX, 2);
-        je("EXIT");
-        cmp(Register.EAX, 4);
+
+        cmp(Register.EAX, 26);
         jne("LOOP");
     }
 
     with (endBlock)
     {
-        label("EXIT");
+        mov(Register.EAX, Register.ECX);
         pop(Register.EBP);
         ret();
     }
@@ -293,5 +375,5 @@ void main()
     assembly.finalize();
     assembly.dump();
 
-    writeln(assembly.call!int());
+    assembly.call!int();
 }
