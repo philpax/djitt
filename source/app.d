@@ -332,11 +332,6 @@ void main()
 {
     BasicBlock preludeBlock, bodyBlock, endBlock;
 
-    extern (C) void c_putchar(int c)
-    {
-        putchar(c);
-    }
-
     with (preludeBlock) with (Register)
     {
         push(EBP);
@@ -353,9 +348,8 @@ void main()
         push(EAX);
 
         // Call putchar, and clean up stack
-        push(ECX);
-        call(&c_putchar);
-        add(ESP, 4);
+        mov(EAX, ECX);
+        call(&putchar);
 
         pop(EAX);
         inc(EAX);
