@@ -337,38 +337,38 @@ void main()
         putchar(c);
     }
 
-    with (preludeBlock)
+    with (preludeBlock) with (Register)
     {
-        push(Register.EBP);
-        mov(Register.ESP, Register.EBP);        
+        push(EBP);
+        mov(ESP, EBP);        
     }
     
-    with (bodyBlock)
+    with (bodyBlock) with (Register)
     {
-        xor(Register.EAX, Register.EAX);
+        xor(EAX, EAX);
 
         label("LOOP");
-        mov(Register.ECX, Register.EAX);
-        add(Register.ECX, 65);
-        push(Register.EAX);
+        mov(ECX, EAX);
+        add(ECX, 65);
+        push(EAX);
 
         // Call putchar, and clean up stack
-        push(Register.ECX);
+        push(ECX);
         call(&c_putchar);
-        add(Register.ESP, 4);
+        add(ESP, 4);
 
-        pop(Register.EAX);
-        inc(Register.EAX);
+        pop(EAX);
+        inc(EAX);
 
-        cmp(Register.EAX, 26);
+        cmp(EAX, 26);
         jne("LOOP");
     }
 
-    with (endBlock)
+    with (endBlock) with (Register)
     {
-        mov(Register.EAX, Register.ECX);
-        pop(Register.EBP);
-        ret();
+        mov(EAX, ECX);
+        pop(EBP);
+        ret;
     }
 
     auto assembly = Assembly(preludeBlock, bodyBlock, endBlock);
