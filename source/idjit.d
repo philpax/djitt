@@ -42,10 +42,32 @@ union ModRM
 
 static assert(ModRM.sizeof == 1);
 
+enum OperandType
+{
+    Byte,
+    Word,
+    DWord,
+    QWord
+}
+
 struct MemoryAccess
 {
+    OperandType type = OperandType.DWord;
     Register register;
-    int offset;
+    int offset = 0;
+
+    this(OperandType type, Register register, int offset = 0)
+    {
+        this.type = type;
+        this.register = register;
+        this.offset = offset;
+    }
+
+    this(Register register, int offset)
+    {
+        this.register = register;
+        this.offset = offset;
+    }
 }
 
 struct LabelRelocation
@@ -107,7 +129,7 @@ struct BasicBlock
             if (r2.offset.fitsIn!byte)
             {
                 this.emit(ModRM(r2.register, r1, 1));
-                this.emitImmediate(cast(ubyte)r2.offset);
+                this.emitImmediate(cast(byte)r2.offset);
             }
             else
             {
@@ -133,7 +155,7 @@ struct BasicBlock
         if (destination == Register.EAX)
         {
             this.emit(0x05);
-            this.emitImmediate(immediate);   
+            this.emitImmediate(immediate);
         }
         else
         {
@@ -141,6 +163,19 @@ struct BasicBlock
             this.emit(ModRM(destination, Register.EAX));
             this.emitImmediate(immediate);
         }
+    }
+
+    void add(MemoryAccess destination, byte immediate)
+    {
+        if (destination.type == OperandType.Byte)
+        {
+            this.emit(0x80);
+            // Write 0 to select 0x80 /0 (add r/m8, i8)
+            this.emitRegisterMemoryAccess(cast(Register)0, destination);
+            this.emitImmediate(cast(byte)immediate);
+        }
+        else
+            assert(false);
     }
 
     void inc(Register destination)
@@ -381,6 +416,7 @@ private:
 
 unittest
 {
+    writeln("Test: basic functionality");
     BasicBlock preludeBlock, bodyBlock, endBlock;
 
     static char[] testBuffer;
@@ -392,7 +428,7 @@ unittest
     with (preludeBlock) with (Register)
     {
         push(EBP);
-        mov(ESP, EBP);        
+        mov(EBP, ESP);       
     }
     
     with (bodyBlock) with (Register)
@@ -431,16 +467,18 @@ unittest
     writeln("Expected output: ", expectedOutput);
     writeln("Actual output: ", testBuffer);
     assert(expectedOutput == testBuffer);
+    writeln();
 }
 
 unittest
 {
+    writeln("Test: mov reg, [reg+offset]");
     BasicBlock block;
 
     with (block) with (Register)
     {
         push(EBP);
-        mov(ESP, EBP);
+        mov(EBP, ESP);
         mov(EAX, _(EBP, 8));
         add(EAX, 5);
         pop(EBP);
@@ -453,7 +491,43 @@ unittest
 
     const expectedOutput = 10;
     auto result = assembly.call!int(5);
-    writeln("Expected output: 10");
+    writeln("Expected output: ", expectedOutput);
     writeln("Actual output: ", result);
     assert(expectedOutput == result);
+    writeln();
+}
+
+unittest
+{
+    writeln("Test: add byte ptr [reg], i8");
+    BasicBlock block;
+
+    with (block) with (Register)
+    {
+        push(EBP);
+        mov(EBP, ESP);
+        // Load array into EDX
+        mov(EDX, _(EBP, 8));
+        // array[0] += 5
+        add(_(OperandType.Byte, EDX), 5);
+        // Move to array[1]
+        inc(EDX);
+        // array[1] += 10
+        add(_(OperandType.Byte, EDX), 10);
+        pop(EBP);
+        ret;
+    }
+
+    auto assembly = Assembly(block);
+    assembly.finalize();
+    assembly.dump();
+
+    ubyte[4] array;
+    assembly(array.ptr);
+
+    const expectedOutput = [5, 10, 0, 0];
+    writeln("Expected output: ", expectedOutput);
+    writeln("Actual output: ", array);
+    assert(expectedOutput == array);
+    writeln();
 }
