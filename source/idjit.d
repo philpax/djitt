@@ -63,7 +63,7 @@ struct MemoryAccess
         this.offset = offset;
     }
 
-    this(Register register, int offset)
+    this(Register register, int offset = 0)
     {
         this.register = register;
         this.offset = offset;
@@ -172,6 +172,19 @@ struct BasicBlock
             this.emit(0x80);
             // Write 0 to select 0x80 /0 (add r/m8, i8)
             this.emitRegisterMemoryAccess(cast(Register)0, destination);
+            this.emitImmediate(cast(byte)immediate);
+        }
+        else
+            assert(false);
+    }
+
+    void sub(MemoryAccess destination, byte immediate)
+    {
+        if (destination.type == OperandType.Byte)
+        {
+            this.emit(0x80);
+            // Write 5 to select 0x80 /5 (sub r/m8, i8)
+            this.emitRegisterMemoryAccess(cast(Register)5, destination);
             this.emitImmediate(cast(byte)immediate);
         }
         else
@@ -499,13 +512,14 @@ unittest
 
 unittest
 {
-    writeln("Test: add byte ptr [reg], i8");
+    writeln("Test: add/sub byte ptr [reg], i8");
     BasicBlock block;
 
     with (block) with (Register)
     {
         push(EBP);
         mov(EBP, ESP);
+        
         // Load array into EDX
         mov(EDX, _(EBP, 8));
         // array[0] += 5
@@ -514,6 +528,11 @@ unittest
         inc(EDX);
         // array[1] += 10
         add(_(OperandType.Byte, EDX), 10);
+        // Move to array[2]
+        inc(EDX);
+        // array[2] -= 10
+        sub(_(OperandType.Byte, EDX), 10);
+
         pop(EBP);
         ret;
     }
@@ -522,10 +541,10 @@ unittest
     assembly.finalize();
     assembly.dump();
 
-    ubyte[4] array;
+    byte[4] array;
     assembly(array.ptr);
 
-    const expectedOutput = [5, 10, 0, 0];
+    const expectedOutput = [5, 10, -10, 0];
     writeln("Expected output: ", expectedOutput);
     writeln("Actual output: ", array);
     assert(expectedOutput == array);
