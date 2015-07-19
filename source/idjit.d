@@ -238,9 +238,18 @@ struct BasicBlock
 
     void mov(Register destination, MemoryAccess source)
     {
-        // mov reg, [reg+disp]
-        this.emit(0x8B);
-        this.emitRegisterMemoryAccess(destination, source);
+        if (source.type == OperandType.Byte)
+        {
+            // mov reg8, byte ptr [reg+disp]
+            this.emit(0x8A);
+            this.emitRegisterMemoryAccess(destination, source);
+        }
+        else
+        {
+            // mov reg, dword ptr [reg+disp]
+            this.emit(0x8B);
+            this.emitRegisterMemoryAccess(destination, source);            
+        }
     }
 
     void mov(Register destination, uint immediate)
@@ -407,6 +416,11 @@ struct Assembly
         this.buffer_.map!(a => "%.2X".format(a)).join(" ").writeln();
     }
 
+    @property const(ubyte[]) buffer()
+    {
+        return this.buffer_;
+    }
+
     T call(T = void, Args...)(Args args)
     {
         extern (C) T function(Args) fn;
@@ -519,7 +533,7 @@ unittest
     {
         push(EBP);
         mov(EBP, ESP);
-        
+
         // Load array into EDX
         mov(EDX, _(EBP, 8));
         // array[0] += 5
