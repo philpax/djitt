@@ -42,6 +42,12 @@ union ModRM
 
 static assert(ModRM.sizeof == 1);
 
+struct MemoryAccess
+{
+    Register register;
+    int offset;
+}
+
 struct LabelRelocation
 {
     size_t location;
@@ -92,6 +98,27 @@ struct BasicBlock
     {
         this.emitImmediate!uint(0x00);
         this.genericRelocations_ ~= GenericRelocation(this.buffer_.length - 4, destination);        
+    }
+
+    void emitRegisterMemoryAccess(Register r1, MemoryAccess r2)
+    {
+        if (r2.offset)
+        {
+            if (r2.offset.fitsIn!byte)
+            {
+                this.emit(ModRM(r2.register, r1, 1));
+                this.emitImmediate(cast(ubyte)r2.offset);
+            }
+            else
+            {
+                this.emit(ModRM(r2.register, r1, 2));
+                this.emitImmediate(r2.offset);
+            }
+        }
+        else
+        {
+            this.emit(ModRM(r2.register, r1, 0));
+        }
     }
 
     // Arithmetic
@@ -152,6 +179,20 @@ struct BasicBlock
         // mov reg, reg
         this.emit(0x8B);
         this.emit(ModRM(source, destination));
+    }
+
+    void mov(MemoryAccess destination, Register source)
+    {
+        // mov [reg+disp], reg
+        this.emit(0x89);
+        this.emitRegisterMemoryAccess(source, destination);
+    }
+
+    void mov(Register destination, MemoryAccess source)
+    {
+        // mov reg, [reg+disp]
+        this.emit(0x8B);
+        this.emitRegisterMemoryAccess(destination, source);
     }
 
     void mov(Register destination, uint immediate)
@@ -222,6 +263,12 @@ struct BasicBlock
             this.emit(0xCC);
         else
             assert(false);
+    }
+
+    // Forwards to constructor for convenience in `with` blocks
+    MemoryAccess _(Args...)(Args args)
+    {
+        return MemoryAccess(args);
     }
 
     void dump()
@@ -312,11 +359,16 @@ struct Assembly
         this.buffer_.map!(a => "%.2X".format(a)).join(" ").writeln();
     }
 
-    T call(T)()
+    T call(T = void, Args...)(Args args)
     {
-        extern (C) T function() fn;
+        extern (C) T function(Args) fn;
         fn = cast(typeof(fn))this.buffer_.ptr;        
-        return fn();
+        return fn(args);
+    }
+
+    void opCall(Args...)(Args args)
+    {
+        this.call(args);
     }
 
 private:
@@ -373,10 +425,35 @@ unittest
     assembly.finalize();
     assembly.dump();
 
-    auto expectedOutput = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const expectedOutput = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-    assembly.call!int();
+    assembly();
     writeln("Expected output: ", expectedOutput);
     writeln("Actual output: ", testBuffer);
     assert(expectedOutput == testBuffer);
+}
+
+unittest
+{
+    BasicBlock block;
+
+    with (block) with (Register)
+    {
+        push(EBP);
+        mov(ESP, EBP);
+        mov(EAX, _(EBP, 8));
+        add(EAX, 5);
+        pop(EBP);
+        ret;
+    }
+
+    auto assembly = Assembly(block);
+    assembly.finalize();
+    assembly.dump();
+
+    const expectedOutput = 10;
+    auto result = assembly.call!int(5);
+    writeln("Expected output: 10");
+    writeln("Actual output: ", result);
+    assert(expectedOutput == result);
 }
