@@ -1,9 +1,8 @@
-import std.stdio;
-import std.typecons;
 import std.bitmanip;
 import std.algorithm;
 import std.string;
 import std.array;
+import std.stdio;
 
 enum Register
 {
@@ -328,9 +327,15 @@ private:
     GenericRelocation[] genericRelocations_;
 }
 
-void main()
+unittest
 {
     BasicBlock preludeBlock, bodyBlock, endBlock;
+
+    static char[] testBuffer;
+    static void putchar_test(int c)
+    {
+        testBuffer ~= c;
+    }
 
     with (preludeBlock) with (Register)
     {
@@ -349,7 +354,7 @@ void main()
 
         // Call putchar, and clean up stack
         mov(EAX, ECX);
-        call(&putchar);
+        call(&putchar_test);
 
         pop(EAX);
         inc(EAX);
@@ -360,7 +365,6 @@ void main()
 
     with (endBlock) with (Register)
     {
-        mov(EAX, ECX);
         pop(EBP);
         ret;
     }
@@ -369,5 +373,10 @@ void main()
     assembly.finalize();
     assembly.dump();
 
+    auto expectedOutput = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
     assembly.call!int();
+    writeln("Expected output: ", expectedOutput);
+    writeln("Actual output: ", testBuffer);
+    assert(expectedOutput == testBuffer);
 }
