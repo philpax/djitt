@@ -106,8 +106,11 @@ struct BasicBlock
 
     void emitImmediate(T)(T val)
     {
-        foreach (i; 0 .. T.sizeof)
-            this.buffer_ ~= (cast(ubyte*)&val)[i];
+        import core.stdc.string : memcpy;
+        const size = T.sizeof;
+
+        this.buffer_.length += size;
+        memcpy(&this.buffer_[$-size], &val, size);
     }
 
     void emitLabelRelocation(string name)
