@@ -153,6 +153,22 @@ struct BasicBlock
         this.emit(ModRM(destination, source));
     }
 
+    void add(Register destination, byte immediate)
+    {
+        if (destination == Register.EAX)
+        {
+            this.emit(0x04);
+            this.emitImmediate(immediate);
+        }
+        else
+        {
+            this.emit(0x80);
+            // Write 0 to select 0x80 /0 (add r/m8, i8)
+            this.emit(ModRM(destination, cast(Register)0));
+            this.emitImmediate(immediate);
+        }
+    }
+
     void add(Register destination, uint immediate)
     {
         if (destination == Register.EAX)
@@ -163,7 +179,8 @@ struct BasicBlock
         else
         {
             this.emit(0x81);
-            this.emit(ModRM(destination, Register.EAX));
+            // Write 0 to select 0x81 /0 (add r/m32, i32)
+            this.emit(ModRM(destination, cast(Register)0));
             this.emitImmediate(immediate);
         }
     }
@@ -192,6 +209,38 @@ struct BasicBlock
         }
         else
             assert(false);
+    }
+
+    void sub(Register destination, byte immediate)
+    {
+        if (destination == Register.EAX)
+        {
+            this.emit(0x2C);
+            this.emitImmediate(immediate);
+        }
+        else
+        {
+            this.emit(0x80);
+            // Write 0 to select 0x80 /5 (sub r/m8, i8)
+            this.emit(ModRM(destination, cast(Register)5));
+            this.emitImmediate(immediate);
+        }
+    }
+
+    void sub(Register destination, uint immediate)
+    {
+        if (destination == Register.EAX)
+        {
+            this.emit(0x2D);
+            this.emitImmediate(immediate);
+        }
+        else
+        {
+            this.emit(0x81);
+            // Write 5 to select 0x81 /5 (sub r/m32, i32)
+            this.emit(ModRM(destination, cast(Register)5));
+            this.emitImmediate(immediate);
+        }
     }
 
     void inc(Register destination)
