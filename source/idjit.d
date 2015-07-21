@@ -328,7 +328,25 @@ struct BasicBlock
             this.emitImmediate(immediate);
         }
         else
-            assert(false);        
+        {
+            this.emit(0x81);
+            // Write 7 to select 0x81 /7 (cmp r/m32, i32)
+            this.emit(ModRM(source, cast(Register)7));
+            this.emitImmediate(immediate);
+        }
+    }
+
+    void cmp(MemoryAccess destination, byte immediate)
+    {
+        if (destination.type == OperandType.Byte)
+        {
+            this.emit(0x80);
+            // Write 7 to select 0x80 /7 (cmp r/m8, i8)
+            this.emitRegisterMemoryAccess(cast(Register)7, destination);
+            this.emitImmediate(cast(byte)immediate);
+        }
+        else
+            assert(false);
     }
 
     // Control flow
