@@ -185,6 +185,17 @@ struct BasicBlock
         }
     }
 
+    void add(MemoryAccess destination, uint immediate)
+    {
+        if (destination.type == OperandType.DWord)
+        {
+            this.emit(0x81);
+            // Write 0 to select 0x81 /0 (add r/m32, i32)
+            this.emitRegisterMemoryAccess(cast(Register)0, destination);
+            this.emitImmediate(immediate);
+        }
+    }
+
     void add(MemoryAccess destination, byte immediate)
     {
         if (destination.type == OperandType.Byte)
@@ -221,7 +232,7 @@ struct BasicBlock
         else
         {
             this.emit(0x80);
-            // Write 0 to select 0x80 /5 (sub r/m8, i8)
+            // Write 5 to select 0x80 /5 (sub r/m8, i8)
             this.emit(ModRM(destination, cast(Register)5));
             this.emitImmediate(immediate);
         }
@@ -249,10 +260,30 @@ struct BasicBlock
         this.emit(0x40 + cast(ubyte)destination);
     }
 
+    void inc(MemoryAccess destination)
+    {
+        if (destination.type == OperandType.Byte)
+            this.emit(0xFE);
+        else
+            this.emit(0xFF);
+
+        this.emitRegisterMemoryAccess(cast(Register)0, destination);
+    }
+
     void dec(Register destination)
     {
         // dec eax -> edi
         this.emit(0x48 + cast(ubyte)destination);
+    }
+
+    void dec(MemoryAccess destination)
+    {
+        if (destination.type == OperandType.Byte)
+            this.emit(0xFE);
+        else
+            this.emit(0xFF);
+
+        this.emitRegisterMemoryAccess(cast(Register)1, destination);
     }
 
     void xor(Register destination, Register source)
