@@ -424,9 +424,14 @@ struct BasicBlock
     }
 
     // Forwards to constructor for convenience in `with` blocks
-    MemoryAccess _(Args...)(Args args)
+    MemoryAccess bytePtr(Args...)(Args args)
     {
-        return MemoryAccess(args);
+        return MemoryAccess(OperandType.Byte, args);
+    }
+
+    MemoryAccess dwordPtr(Args...)(Args args)
+    {
+        return MemoryAccess(OperandType.DWord, args);
     }
 
     void dump()
@@ -607,7 +612,7 @@ unittest
     {
         push(EBP);
         mov(EBP, ESP);
-        mov(EAX, _(EBP, 8));
+        mov(EAX, dwordPtr(EBP, 8));
         add(EAX, 5);
         pop(EBP);
         ret;
@@ -636,17 +641,17 @@ unittest
         mov(EBP, ESP);
 
         // Load array into EDX
-        mov(EDX, _(EBP, 8));
+        mov(EDX, dwordPtr(EBP, 8));
         // array[0] += 5
-        add(_(OperandType.Byte, EDX), 5);
+        add(bytePtr(EDX), 5);
         // Move to array[1]
         inc(EDX);
         // array[1] += 10
-        add(_(OperandType.Byte, EDX), 10);
+        add(bytePtr(EDX), 10);
         // Move to array[2]
         inc(EDX);
         // array[2] -= 10
-        sub(_(OperandType.Byte, EDX), 10);
+        sub(bytePtr(EDX), 10);
 
         pop(EBP);
         ret;
