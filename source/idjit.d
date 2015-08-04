@@ -342,6 +342,19 @@ struct BasicBlock
         this.emitImmediate(immediate);
     }
 
+    void mov(MemoryAccess destination, byte immediate)
+    {
+        if (destination.type == OperandType.Byte)
+        {
+            this.emit(0xC6);
+            // Write 0 to select 0xC6 /0 (mov r/m8, i8)
+            this.emitRegisterMemoryAccess(cast(Register)0, destination);
+            this.emitImmediate(cast(byte)immediate);
+        }
+        else
+            assert(false);
+    }
+
     void cmp(Register source, ubyte immediate)
     {
         if (source == Register.EAX)
@@ -514,7 +527,7 @@ struct Assembly
             import core.sys.posix.sys.mman;
         
             mprotect(this.buffer_.ptr, this.buffer_.length, PROT_READ|PROT_WRITE|PROT_EXEC);
-        }
+         }
     }
 
     void dump()
