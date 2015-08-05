@@ -115,8 +115,8 @@ struct BasicBlock
 
     void emitLabelRelocation(string name)
     {
-        this.emit(0x00);
-        this.labelRelocations_ ~= LabelRelocation(this.buffer_.length - 1, name);        
+        this.emitImmediate!uint(0x00);
+        this.labelRelocations_ ~= LabelRelocation(this.buffer_.length - 4, name);        
     }
 
     void emitGenericRelocation(void* destination)
@@ -342,19 +342,6 @@ struct BasicBlock
         this.emitImmediate(immediate);
     }
 
-    void mov(MemoryAccess destination, byte immediate)
-    {
-        if (destination.type == OperandType.Byte)
-        {
-            this.emit(0xC6);
-            // Write 0 to select 0xC6 /0 (mov r/m8, i8)
-            this.emitRegisterMemoryAccess(cast(Register)0, destination);
-            this.emitImmediate(cast(byte)immediate);
-        }
-        else
-            assert(false);
-    }
-
     void cmp(Register source, ubyte immediate)
     {
         if (source == Register.EAX)
@@ -396,19 +383,21 @@ struct BasicBlock
     // Control flow
     void jmp(string name)
     {
-        this.emit(0xEB);
+        this.emit(0xE9);
         this.emitLabelRelocation(name);
     }
 
     void je(string name)
     {
-        this.emit(0x74);
+        this.emit(0x0F);
+        this.emit(0x84);
         this.emitLabelRelocation(name);
     }
 
     void jne(string name)
     {
-        this.emit(0x75);
+        this.emit(0x0F);
+        this.emit(0x85);
         this.emitLabelRelocation(name);
     }
 
@@ -501,9 +490,9 @@ struct Assembly
         // Do relocations
         foreach (const relocation; this.labelRelocations_)
         {
-            int offset = cast(int)(this.labels_[relocation.label] - relocation.location);
-            assert(offset.fitsIn!byte());
-            this.buffer_[relocation.location] = cast(ubyte)offset;
+            auto location = relocation.location + 3;
+            int offset = cast(int)(this.labels_[relocation.label] - location);
+            *cast(int*)&this.buffer_[relocation.location] = offset;
         }
 
         foreach (const relocation; this.genericRelocations_)
