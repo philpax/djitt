@@ -97,7 +97,7 @@ bool fitsIn(T, Y)(Y value)
     return value >= T.min && value <= T.max;
 }
 
-struct BasicBlock
+struct Block
 {
     void emit(int b)
     {
@@ -463,7 +463,7 @@ private:
 
 struct Assembly
 {
-    this(BasicBlock[] blocks...)
+    this(Block[] blocks...)
     {
         this.blocks_ = blocks.dup;
     }
@@ -555,7 +555,7 @@ struct Assembly
     }
 
 private:
-    BasicBlock[] blocks_;
+    Block[] blocks_;
     ubyte[] buffer_;
     size_t[string] labels_;
     LabelRelocation[] labelRelocations_;
@@ -565,7 +565,7 @@ private:
 unittest
 {
     writeln("Test: basic functionality");
-    BasicBlock preludeBlock, bodyBlock, endBlock;
+    Block preludeBlock, bodyBlock, endBlock;
 
     static char[] testBuffer;
     static void putchar_test(int c)
@@ -621,7 +621,7 @@ unittest
 unittest
 {
     writeln("Test: mov reg, [reg+offset]");
-    BasicBlock block;
+    Block block;
 
     with (block) with (Register)
     {
@@ -648,7 +648,7 @@ unittest
 unittest
 {
     writeln("Test: add/sub byte ptr [reg], i8");
-    BasicBlock block;
+    Block block;
 
     with (block) with (Register)
     {
