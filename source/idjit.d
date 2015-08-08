@@ -344,15 +344,24 @@ struct Block
 
     void mov(MemoryAccess destination, byte immediate)
     {
-        if (destination.type == OperandType.Byte)
-        {
-            this.emit(0xC6);
-            // Write 0 to select 0xC6 /0 (mov r/m8, i8)
-            this.emitRegisterMemoryAccess(cast(Register)0, destination);
-            this.emitImmediate(cast(byte)immediate);
-        }
-        else
+        if (destination.type != OperandType.Byte)
             assert(false);
+
+        this.emit(0xC6);
+        // Write 0 to select 0xC6 /0 (mov r/m8, i8)
+        this.emitRegisterMemoryAccess(cast(Register)0, destination);
+        this.emitImmediate(cast(byte)immediate);
+    }
+
+    void mov(MemoryAccess destination, uint immediate)
+    {
+        if (destination.type != OperandType.DWord)
+            assert(false);
+
+        this.emit(0xC7);
+        // Write 0 to select 0xC7 /0 (mov r/m32, i32)
+        this.emitRegisterMemoryAccess(cast(Register)0, destination);
+        this.emitImmediate(immediate);
     }
 
     void cmp(Register source, ubyte immediate)
