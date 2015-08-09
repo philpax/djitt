@@ -1,4 +1,4 @@
-# idjit
+# djitt
 An in-memory x86-32 assembler for JIT use.
 
 ## Features
