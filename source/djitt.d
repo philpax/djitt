@@ -486,6 +486,13 @@ struct Assembly
             if (this.finalBuffer_)
                 VirtualFree(this.finalBuffer_, 0, MEM_RELEASE);
         }
+        else version (linux)
+        {
+            import core.sys.posix.sys.mman;
+
+            if (this.finalBuffer_)
+                munmap(this.finalBuffer_, this.buffer_.length);
+        }
     }
 
     void finalize()
@@ -521,21 +528,26 @@ struct Assembly
         }
 
         // Copy into the final memory buffer, with privileges
+        import std.c.string;
         version (Windows)
         {
-            import std.c.windows.windows, std.c.string;
+            import std.c.windows.windows;
 
             this.finalBuffer_ = cast(ubyte*)VirtualAlloc(
                 null, this.buffer_.length, MEM_COMMIT, PAGE_READWRITE);
-
-            memcpy(this.finalBuffer_, this.buffer_.ptr, this.buffer_.length);
         }
-        else
+        else version (linux)
         {
-            import core.sys.posix.sys.mman;
+            import core.sys.linux.sys.mman;
         
-            mprotect(this.buffer_.ptr, this.buffer_.length, PROT_READ|PROT_WRITE|PROT_EXEC);
+            this.finalBuffer_ = cast(ubyte*)mmap(
+                null, this.buffer_.length, PROT_READ|PROT_WRITE,
+                MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
+
+            assert(this.finalBuffer_);
         }
+
+        memcpy(this.finalBuffer_, this.buffer_.ptr, this.buffer_.length);
 
         // Do relocations
         foreach (const relocation; this.labelRelocations_)
@@ -583,6 +595,16 @@ struct Assembly
 
             scope (exit)
                 VirtualProtect(this.finalBuffer_, length, old, &old);
+        }
+        else version (linux)
+        {
+            import core.sys.posix.sys.mman;
+
+            auto length = this.buffer_.length;
+            mprotect(this.finalBuffer_, length, PROT_EXEC);
+
+            scope (exit)
+                mprotect(this.finalBuffer_, length, PROT_READ|PROT_WRITE);
         }
 
         fn = cast(typeof(fn))this.finalBuffer_;
