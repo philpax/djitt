@@ -477,6 +477,17 @@ struct Assembly
         this.blocks_ = blocks.dup;
     }
 
+    ~this()
+    {
+        version (Windows)
+        {
+            import std.c.windows.windows;
+
+            if (this.finalBuffer_)
+                VirtualFree(this.finalBuffer_, 0, MEM_RELEASE);
+        }
+    }
+
     void finalize()
     {
         size_t baseAddress = 0;
@@ -509,52 +520,72 @@ struct Assembly
             baseAddress += block.buffer_.length;
         }
 
-        // Do relocations
-        foreach (const relocation; this.labelRelocations_)
-        {
-            auto location = relocation.location + 3;
-            int offset = cast(int)(this.labels_[relocation.label] - location);
-            *cast(int*)&this.buffer_[relocation.location] = offset;
-        }
-
-        foreach (const relocation; this.genericRelocations_)
-        {
-            auto location = relocation.location + this.buffer_.ptr + 4;
-            int offset = cast(int)(relocation.destination - location);
-            *cast(int*)&this.buffer_[relocation.location] = offset;
-        }
-
-        // Add execution privileges to the memory
+        // Copy into the final memory buffer, with privileges
         version (Windows)
         {
-            import std.c.windows.windows;
+            import std.c.windows.windows, std.c.string;
 
-            DWORD old;
-            VirtualProtect(this.buffer_.ptr, this.buffer_.length, 
-                           PAGE_EXECUTE_READWRITE, &old);
+            this.finalBuffer_ = cast(ubyte*)VirtualAlloc(
+                null, this.buffer_.length, MEM_COMMIT, PAGE_READWRITE);
+
+            memcpy(this.finalBuffer_, this.buffer_.ptr, this.buffer_.length);
         }
         else
         {
             import core.sys.posix.sys.mman;
         
             mprotect(this.buffer_.ptr, this.buffer_.length, PROT_READ|PROT_WRITE|PROT_EXEC);
-         }
+        }
+
+        // Do relocations
+        foreach (const relocation; this.labelRelocations_)
+        {
+            auto location = relocation.location + 3;
+            int offset = cast(int)(this.labels_[relocation.label] - location);
+            *cast(int*)&this.finalBuffer_[relocation.location] = offset;
+        }
+
+        foreach (const relocation; this.genericRelocations_)
+        {
+            auto location = relocation.location + this.finalBuffer_ + 4;
+            int offset = cast(int)(relocation.destination - location);
+            *cast(int*)&this.finalBuffer_[relocation.location] = offset;
+        }
     }
 
     void dump()
     {
-        this.buffer_.map!(a => "%.2X".format(a)).join(" ").writeln();
+        this.buffer.map!(a => "%.2X".format(a)).join(" ").writeln();
     }
 
     @property const(ubyte[]) buffer()
     {
-        return this.buffer_;
+        if (this.finalBuffer_)
+            return this.finalBuffer_[0..this.buffer_.length];
+        else
+            return this.buffer_;
     }
 
     T call(T = void, Args...)(Args args)
     {
         extern (C) T function(Args) fn;
-        fn = cast(typeof(fn))this.buffer_.ptr;        
+
+        assert(this.finalBuffer_ != null);
+
+        // Provide execute privileges to buffer
+        version (Windows)
+        {
+            import std.c.windows.windows;
+            DWORD old;
+
+            auto length = this.buffer_.length;
+            VirtualProtect(this.finalBuffer_, length, PAGE_EXECUTE, &old);
+
+            scope (exit)
+                VirtualProtect(this.finalBuffer_, length, old, &old);
+        }
+
+        fn = cast(typeof(fn))this.finalBuffer_;
         return fn(args);
     }
 
@@ -566,6 +597,7 @@ struct Assembly
 private:
     Block[] blocks_;
     ubyte[] buffer_;
+    ubyte* finalBuffer_;
     size_t[string] labels_;
     LabelRelocation[] labelRelocations_;
     GenericRelocation[] genericRelocations_;
