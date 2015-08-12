@@ -74,22 +74,25 @@ struct LabelRelocation
 {
     size_t location;
     string label;
+    bool signExtend;
 }
 
 struct GenericRelocation
 {
-    this(size_t location, const(void*) destination)
+    this(size_t location, const(void*) destination, bool signExtend)
     {
         this.location = location;
         this.destination = destination;
+        this.signExtend = signExtend;
 
-        // Assume that this instruction ends 4 bytes after the relocation source
-        this.relativeToLocation = this.location + 4;
+        // Assume that this instruction ends after this relocation
+        this.relativeToLocation = this.location + (signExtend ? 8 : 4);
     }
 
     size_t location;
     size_t relativeToLocation;
     const(void*) destination;
+    bool signExtend;
 }
 
 bool fitsIn(T, Y)(Y value)
@@ -113,16 +116,40 @@ struct Block
         memcpy(&this.buffer_[$-size], &val, size);
     }
 
-    void emitLabelRelocation(string name)
+    void emitLabelRelocation(string name, bool signExtend = false)
     {
-        this.emitImmediate!uint(0x00);
-        this.labelRelocations_ ~= LabelRelocation(this.buffer_.length - 4, name);        
+        version (X86)
+            signExtend = false;
+
+        void emitRelocation(Type)()
+        {
+            this.labelRelocations_ ~=
+                LabelRelocation(this.buffer_.length, name, signExtend);
+            this.emitImmediate!Type(0x00);
+        }
+
+        if (signExtend)
+            emitRelocation!ulong();
+        else
+            emitRelocation!uint();
     }
 
-    void emitGenericRelocation(void* destination)
+    void emitGenericRelocation(void* destination, bool signExtend = false)
     {
-        this.emitImmediate!uint(0x00);
-        this.genericRelocations_ ~= GenericRelocation(this.buffer_.length - 4, destination);        
+        version (X86)
+            signExtend = false;
+
+        void emitRelocation(Type)()
+        {
+            this.genericRelocations_ ~=
+                GenericRelocation(this.buffer_.length, destination, signExtend);
+            this.emitImmediate!Type(0x00);
+        }
+
+        if (signExtend)
+            emitRelocation!ulong();
+        else
+            emitRelocation!uint();
     }
 
     void emitRegisterMemoryAccess(Register r1, MemoryAccess r2)
@@ -143,6 +170,14 @@ struct Block
         else
         {
             this.emit(ModRM(r2.register, r1, 0));
+        }
+    }
+
+    void emitRexW()
+    {
+        version (X86_64)
+        {
+            this.emit(0x48);
         }
     }
 
@@ -256,8 +291,19 @@ struct Block
 
     void inc(Register destination)
     {
-        // inc eax -> edi
-        this.emit(0x40 + cast(ubyte)destination);
+        version (X86_64)
+        {
+            this.emitRexW();
+            this.emit(0xFF);
+
+            // Write 0 to select 0xFF /0 (inc r/m8)
+            this.emit(ModRM(destination, cast(Register)0));
+        }
+        else
+        {
+            // inc eax -> edi
+            this.emit(0x40 + cast(ubyte)destination);
+        }
     }
 
     void inc(MemoryAccess destination)
@@ -308,6 +354,7 @@ struct Block
     void mov(Register destination, Register source)
     {
         // mov reg, reg
+        this.emitRexW();
         this.emit(0x8B);
         this.emit(ModRM(source, destination));
     }
@@ -315,6 +362,7 @@ struct Block
     void mov(MemoryAccess destination, Register source)
     {
         // mov [reg+disp], reg
+        this.emitRexW();
         this.emit(0x89);
         this.emitRegisterMemoryAccess(source, destination);
     }
@@ -338,6 +386,14 @@ struct Block
     void mov(Register destination, uint immediate)
     {
         // mov reg, imm32
+        this.emit(0xB8 + cast(ubyte)destination);
+        this.emitImmediate(immediate);
+    }
+
+    void mov(Register destination, ulong immediate)
+    {
+        // mov reg, imm64
+        this.emitRexW();
         this.emit(0xB8 + cast(ubyte)destination);
         this.emitImmediate(immediate);
     }
@@ -406,7 +462,7 @@ struct Block
     void jmp(string name)
     {
         this.emit(0xE9);
-        this.emitLabelRelocation(name);
+        this.emitLabelRelocation(name, true);
     }
 
     void je(string name)
@@ -427,6 +483,13 @@ struct Block
     {
         this.emit(0xE8);
         this.emitGenericRelocation(destination);
+    }
+
+    void call(Register destination)
+    {
+        this.emit(0xFF);
+        // Write 2 to select call r/m64 (0xFF /2)
+        this.emit(ModRM(destination, cast(Register)2));
     }
 
     void label(string name)
@@ -510,17 +573,17 @@ struct Assembly
                 this.labels_[key] = value + baseAddress;
 
             // Copy the relocations to the assembly, offseting them as we go along
-            foreach (const relocation; block.labelRelocations_)
+            foreach (relocation; block.labelRelocations_)
             {
-                this.labelRelocations_ ~= 
-                    LabelRelocation(relocation.location + baseAddress, relocation.label);
+                relocation.location += baseAddress;
+                this.labelRelocations_ ~= relocation;
             }
 
             // Copy the relocations to the assembly, offseting them as we go along
-            foreach (const relocation; block.genericRelocations_)
+            foreach (relocation; block.genericRelocations_)
             {
-                this.genericRelocations_ ~= 
-                    GenericRelocation(relocation.location + baseAddress, relocation.destination);
+                relocation.location += baseAddress;
+                this.genericRelocations_ ~= relocation;
             }
 
             // Update the new base address
@@ -550,18 +613,31 @@ struct Assembly
         memcpy(this.finalBuffer_, this.buffer_.ptr, this.buffer_.length);
 
         // Do relocations
+        void writeInteger(Offset)(size_t location, Offset offset, bool signExtend)
+        {
+            if (signExtend)
+                *cast(long*)&this.finalBuffer_[location] = offset;
+            else
+                *cast(int*)&this.finalBuffer_[location] = cast(int)offset;
+        }
+
+        import std.traits : Signed;
         foreach (const relocation; this.labelRelocations_)
         {
             auto location = relocation.location + 3;
-            int offset = cast(int)(this.labels_[relocation.label] - location);
-            *cast(int*)&this.finalBuffer_[relocation.location] = offset;
+            alias SignedType = Signed!size_t;
+            auto offset = cast(SignedType)(this.labels_[relocation.label] - location);
+
+            writeInteger(relocation.location, offset, relocation.signExtend);
         }
 
         foreach (const relocation; this.genericRelocations_)
         {
             auto location = relocation.location + this.finalBuffer_ + 4;
-            int offset = cast(int)(relocation.destination - location);
-            *cast(int*)&this.finalBuffer_[relocation.location] = offset;
+            alias SignedType = Signed!size_t;
+            auto offset = cast(SignedType)(relocation.destination - location);
+
+            writeInteger(relocation.location, offset, relocation.signExtend);
         }
     }
 
@@ -628,7 +704,7 @@ private:
 unittest
 {
     writeln("Test: basic functionality");
-    Block preludeBlock, bodyBlock, endBlock;
+    Block block;
 
     static char[] testBuffer;
     static void putchar_test(int c)
@@ -636,39 +712,38 @@ unittest
         testBuffer ~= c;
     }
 
-    with (preludeBlock) with (Register)
+    with (block) with (Register)
     {
         push(EBP);
-        mov(EBP, ESP);       
-    }
-    
-    with (bodyBlock) with (Register)
-    {
+        mov(EBP, ESP);
+
+        push(EBX);
+        mov(EBX, cast(size_t)&putchar_test);
         xor(EAX, EAX);
 
         label("LOOP");
         mov(ECX, EAX);
         add(ECX, 65);
-        push(EAX);
 
         // Call putchar, and clean up stack
-        mov(EAX, ECX);
-        call(&putchar_test);
-
+        push(ECX);
+        mov(EDI, ECX);
+        push(EAX);
+        call(EBX);
         pop(EAX);
+        pop(ECX);
+
         inc(EAX);
 
         cmp(EAX, 26);
         jne("LOOP");
-    }
 
-    with (endBlock) with (Register)
-    {
+        pop(EBX);
         pop(EBP);
         ret;
     }
 
-    auto assembly = Assembly(preludeBlock, bodyBlock, endBlock);
+    auto assembly = Assembly(block);
     assembly.finalize();
     assembly.dump();
 
@@ -690,7 +765,10 @@ unittest
     {
         push(EBP);
         mov(EBP, ESP);
-        mov(EAX, dwordPtr(EBP, 8));
+        version (X86_64)
+            mov(EAX, EDI);
+        else
+            mov(EAX, dwordPtr(EBP, 8));
         add(EAX, 5);
         pop(EBP);
         ret;
@@ -719,7 +797,10 @@ unittest
         mov(EBP, ESP);
 
         // Load array into EDX
-        mov(EDX, dwordPtr(EBP, 8));
+        version (X86_64)
+            mov(EDX, EDI);
+        else
+            mov(EDX, dwordPtr(EBP, 8));
         // array[0] += 5
         add(bytePtr(EDX), 5);
         // Move to array[1]
