@@ -730,8 +730,17 @@ unittest
         version (X86_64)
         {
             push(ECX);
-            mov(EDI, ECX);
-            call(EBX);
+            version (POSIX)
+            {
+                mov(EDI, ECX);
+                call(EBX);
+            }
+            version (Windows)
+            {
+                sub(ESP, 32);
+                call(EBX);
+                add(ESP, 32);
+            }
             pop(ECX);
         }
         else
@@ -776,7 +785,12 @@ unittest
         push(EBP);
         mov(EBP, ESP);
         version (X86_64)
-            mov(EAX, EDI);
+        {
+            version (POSIX)
+                mov(EAX, EDI);
+            version (Windows)
+                mov(EAX, ECX);
+        }
         else
             mov(EAX, dwordPtr(EBP, 8));
         add(EAX, 5);
@@ -808,7 +822,12 @@ unittest
 
         // Load array into EDX
         version (X86_64)
-            mov(EDX, EDI);
+        {
+            version (POSIX)
+                mov(EDX, EDI);
+            version (Windows)
+                mov(EDX, ECX);
+        }
         else
             mov(EDX, dwordPtr(EBP, 8));
         // array[0] += 5
