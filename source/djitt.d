@@ -726,12 +726,22 @@ unittest
         add(ECX, 65);
 
         // Call putchar, and clean up stack
-        push(ECX);
-        mov(EDI, ECX);
         push(EAX);
-        call(EBX);
+        version (X86_64)
+        {
+            push(ECX);
+            mov(EDI, ECX);
+            call(EBX);
+            pop(ECX);
+        }
+        else
+        {
+            push(EBX);
+            mov(EAX, ECX);
+            call(EBX);
+            pop(EBX);
+        }
         pop(EAX);
-        pop(ECX);
 
         inc(EAX);
 
