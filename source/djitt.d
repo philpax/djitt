@@ -730,7 +730,7 @@ unittest
         version (X86_64)
         {
             push(ECX);
-            version (POSIX)
+            version (Posix)
             {
                 mov(EDI, ECX);
                 call(EBX);
@@ -786,7 +786,7 @@ unittest
         mov(EBP, ESP);
         version (X86_64)
         {
-            version (POSIX)
+            version (Posix)
                 mov(EAX, EDI);
             version (Windows)
                 mov(EAX, ECX);
@@ -823,7 +823,7 @@ unittest
         // Load array into EDX
         version (X86_64)
         {
-            version (POSIX)
+            version (Posix)
                 mov(EDX, EDI);
             version (Windows)
                 mov(EDX, ECX);
