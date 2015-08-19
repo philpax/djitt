@@ -87,13 +87,12 @@ static assert(ModRM.sizeof == 1);
 
 struct MemoryAccess(int Size)
 {
-    alias Register = Reg!Size;
-    Register register;
+    ubyte register;
     int offset = 0;
 
-    this(Register register, int offset = 0)
+    this(Register)(Register register, int offset = 0)
     {
-        this.register = register;
+        this.register = register.index;
         this.offset = offset;
     }
 }
@@ -186,18 +185,18 @@ struct Block
         {
             if (r2.offset.fitsIn!byte)
             {
-                this.emit(ModRM(r2.register, r1, Mode.MemoryOffset8));
+                this.emit(ModRM(Register(r2.register), r1, Mode.MemoryOffset8));
                 this.emitImmediate(cast(byte)r2.offset);
             }
             else
             {
-                this.emit(ModRM(r2.register, r1, Mode.MemoryOffsetExt));
+                this.emit(ModRM(Register(r2.register), r1, Mode.MemoryOffsetExt));
                 this.emitImmediate(r2.offset);
             }
         }
         else
         {
-            this.emit(ModRM(r2.register, r1, Mode.Memory));
+            this.emit(ModRM(Register(r2.register), r1, Mode.Memory));
         }
     }
 
@@ -864,15 +863,15 @@ unittest
         else
             mov(EDX, dwordPtr(EBP, 8));
         // array[0] += 5
-        add(bytePtr(DL), 5);
+        add(bytePtr(EDX), 5);
         // Move to array[1]
         inc(EDX);
         // array[1] += 10
-        add(bytePtr(DL), 10);
+        add(bytePtr(EDX), 10);
         // Move to array[2]
         inc(EDX);
         // array[2] -= 10
-        sub(bytePtr(DL), 10);
+        sub(bytePtr(EDX), 10);
 
         pop(EBP);
         ret;
