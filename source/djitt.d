@@ -409,6 +409,13 @@ struct Block
         this.emitRegisterMemoryAccess(destination, source);
     }
 
+    void mov(MemoryAccess!8 destination, Reg8 source)
+    {
+        // mov byte ptr [reg+disp], reg8
+        this.emit(0x88);
+        this.emitRegisterMemoryAccess(source, destination);
+    }
+
     void mov(Reg32 destination, MemoryAccess!32 source)
     {
         // mov reg, dword ptr [reg+disp]
