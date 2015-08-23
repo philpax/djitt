@@ -247,6 +247,12 @@ struct Block
         }
     }
 
+    void add(Reg64 destination, uint immediate)
+    {
+        this.emitRexW();
+        this.add(Reg32(destination.index), immediate);
+    }
+
     void add(MemoryAccess!32 destination, uint immediate)
     {
         this.emit(0x81);
@@ -303,11 +309,16 @@ struct Block
         }
     }
 
+    void sub(Reg64 destination, uint immediate)
+    {
+        this.emitRexW();
+        this.sub(Reg32(destination.index), immediate);
+    }
+
     void inc(Reg32 destination)
     {
         version (X86_64)
         {
-            this.emitRexW();
             this.emit(0xFF);
 
             // Write 0 to select 0xFF /0 (inc r/m)
@@ -318,6 +329,12 @@ struct Block
             // inc eax -> edi
             this.emit(0x40 + destination.index);
         }
+    }
+
+    void inc(Reg64 destination)
+    {
+        this.emitRexW();
+        this.inc(Reg32(destination.index));
     }
 
     void inc(MemoryAccess!8 destination)
@@ -336,7 +353,6 @@ struct Block
     {
         version (X86_64)
         {
-            this.emitRexW();
             this.emit(0xFF);
 
             // Write 1 to select 0xFF /1 (dec r/m)
@@ -347,6 +363,12 @@ struct Block
             // dec eax -> edi
             this.emit(0x48 + destination.index);
         }
+    }
+
+    void dec(Reg64 destination)
+    {
+        this.emitRexW();
+        this.dec(Reg32(destination.index));
     }
 
     void dec(MemoryAccess!8 destination)
