@@ -397,10 +397,20 @@ struct Block
         this.emit(0x50 + register.index);
     }
 
+    void push(Reg64 register)
+    {
+        this.push(Reg32(register.index));
+    }
+
     void pop(Reg32 register)
     {
         // pop eax -> edi
         this.emit(0x58 + register.index);
+    }
+
+    void pop(Reg64 register)
+    {
+        this.pop(Reg32(register.index));
     }
 
     void mov(Reg32 destination, Reg32 source)
