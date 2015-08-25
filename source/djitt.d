@@ -787,16 +787,18 @@ unittest
         testBuffer ~= c;
     }
 
+    version (X86_64)
+        alias PutcharRegister = RBX;
+    else
+        alias PutcharRegister = EBX;
+
     with (block)
     {
         push(EBP);
         mov(EBP, ESP);
 
-        push(EBX);
-        version (X86)
-            mov(EBX, cast(size_t)&putchar_test);
-        else version (X86_64)
-            mov(RBX, cast(size_t)&putchar_test);
+        push(PutcharRegister);
+        mov(PutcharRegister, &putchar_test);
         xor(EAX, EAX);
 
         label("LOOP");
@@ -807,26 +809,26 @@ unittest
         push(EAX);
         version (X86_64)
         {
-            push(ECX);
+            push(RCX);
             version (Posix)
             {
-                mov(EDI, ECX);
-                call(EBX);
+                mov(RDI, RCX);
+                call(PutcharRegister);
             }
             else version (Windows)
             {
-                sub(ESP, 32);
-                call(EBX);
-                add(ESP, 32);
+                sub(RSP, 32);
+                call(PutcharRegister);
+                add(RSP, 32);
             }
-            pop(ECX);
+            pop(RCX);
         }
         else
         {
-            push(EBX);
+            push(PutcharRegister);
             mov(EAX, ECX);
-            call(EBX);
-            pop(EBX);
+            call(PutcharRegister);
+            pop(PutcharRegister);
         }
         pop(EAX);
 
@@ -835,7 +837,7 @@ unittest
         cmp(EAX, 26);
         jne("LOOP");
 
-        pop(EBX);
+        pop(PutcharRegister);
         pop(EBP);
         ret;
     }
@@ -893,6 +895,11 @@ unittest
     writeln("Test: add/sub byte ptr [reg], i8");
     Block block;
 
+    version (X86_64)
+        alias ArrayRegister = RDX;
+    else
+        alias ArrayRegister = EDX;
+
     with (block)
     {
         push(EBP);
@@ -902,22 +909,22 @@ unittest
         version (X86_64)
         {
             version (Posix)
-                mov(RDX, RDI);
+                mov(ArrayRegister, RDI);
             else version (Windows)
-                mov(RDX, RCX);
+                mov(ArrayRegister, RCX);
         }
         else
-            mov(EDX, dwordPtr(EBP, 8));
+            mov(ArrayRegister, dwordPtr(EBP, 8));
         // array[0] += 5
-        add(bytePtr(EDX), 5);
+        add(bytePtr(ArrayRegister), 5);
         // Move to array[1]
-        inc(EDX);
+        inc(ArrayRegister);
         // array[1] += 10
-        add(bytePtr(EDX), 10);
+        add(bytePtr(ArrayRegister), 10);
         // Move to array[2]
-        inc(EDX);
+        inc(ArrayRegister);
         // array[2] -= 10
-        sub(bytePtr(EDX), 10);
+        sub(bytePtr(ArrayRegister), 10);
 
         pop(EBP);
         ret;
