@@ -3,6 +3,7 @@ import std.algorithm;
 import std.string;
 import std.array;
 import std.stdio;
+import std.traits;
 
 struct Reg(int Size)
 {
@@ -458,6 +459,12 @@ struct Block
         this.emitRexW();
         this.emit(0xB8 + destination.index);
         this.emitImmediate(immediate);
+    }
+
+    void mov(Register, Function)(Register destination, Function func)
+        if (isFunctionPointer!Function)
+    {
+        this.mov(destination, cast(size_t)func);
     }
 
     void mov(MemoryAccess!8 destination, byte immediate)
