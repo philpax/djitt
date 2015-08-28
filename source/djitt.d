@@ -530,6 +530,12 @@ struct Block
         }
     }
 
+    void cmp(Reg64 source, uint immediate)
+    {
+        this.emitRexW();
+        this.cmp(Reg32(source.index), immediate);
+    }
+
     void cmp(MemoryAccess!8 destination, byte immediate)
     {
         this.emit(0x80);
