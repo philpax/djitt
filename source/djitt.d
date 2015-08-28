@@ -390,6 +390,12 @@ struct Block
         this.emit(ModRM(destination, source));
     }
 
+    void xor(Reg64 destination, Reg64 source)
+    {
+        this.emitRexW();
+        this.xor(Reg32(destination.index), Reg32(source.index));
+    }
+
     // Memory
     void push(Reg32 register)
     {
