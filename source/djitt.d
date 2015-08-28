@@ -51,6 +51,29 @@ enum RBP = Reg64(5);
 enum RSI = Reg64(6);
 enum RDI = Reg64(7);
 
+version (X86_64)
+{
+    alias XAX = RAX;
+    alias XCX = RCX;
+    alias XDX = RDX;
+    alias XBX = RBX;
+    alias XSP = RSP;
+    alias XBP = RBP;
+    alias XSI = RSI;
+    alias XDI = RDI;
+}
+else
+{
+    alias XAX = EAX;
+    alias XCX = ECX;
+    alias XDX = EDX;
+    alias XBX = EBX;
+    alias XSP = ESP;
+    alias XBP = EBP;
+    alias XSI = ESI;
+    alias XDI = EDI;
+}
+
 enum Mode
 {
     Memory,
@@ -811,26 +834,23 @@ unittest
         testBuffer ~= c;
     }
 
-    version (X86_64)
-        alias PutcharRegister = RBX;
-    else
-        alias PutcharRegister = EBX;
+    alias PutcharRegister = XBX;
 
     with (block)
     {
-        push(EBP);
-        mov(EBP, ESP);
+        push(XBP);
+        mov(XBP, XSP);
 
         push(PutcharRegister);
         mov(PutcharRegister, &putchar_test);
-        xor(EAX, EAX);
+        xor(XAX, XAX);
 
         label("LOOP");
-        mov(ECX, EAX);
-        add(ECX, 65);
+        mov(XCX, XAX);
+        add(XCX, 65);
 
         // Call putchar, and clean up stack
-        push(EAX);
+        push(XAX);
         version (X86_64)
         {
             push(RCX);
@@ -850,19 +870,19 @@ unittest
         else
         {
             push(PutcharRegister);
-            mov(EAX, ECX);
+            mov(XAX, XCX);
             call(PutcharRegister);
             pop(PutcharRegister);
         }
-        pop(EAX);
+        pop(XAX);
 
-        inc(EAX);
+        inc(XAX);
 
-        cmp(EAX, 26);
+        cmp(XAX, 26);
         jne("LOOP");
 
         pop(PutcharRegister);
-        pop(EBP);
+        pop(XBP);
         ret;
     }
 
@@ -886,19 +906,19 @@ unittest
 
     with (block)
     {
-        push(EBP);
-        mov(EBP, ESP);
+        push(XBP);
+        mov(XBP, XSP);
         version (X86_64)
         {
             version (Posix)
-                mov(EAX, EDI);
+                mov(RAX, RDI);
             else version (Windows)
-                mov(EAX, ECX);
+                mov(RAX, RCX);
         }
         else
             mov(EAX, dwordPtr(EBP, 8));
-        add(EAX, 5);
-        pop(EBP);
+        add(XAX, 5);
+        pop(XBP);
         ret;
     }
 
@@ -919,15 +939,11 @@ unittest
     writeln("Test: add/sub byte ptr [reg], i8");
     Block block;
 
-    version (X86_64)
-        alias ArrayRegister = RDX;
-    else
-        alias ArrayRegister = EDX;
-
+    alias ArrayRegister = XDX;
     with (block)
     {
-        push(EBP);
-        mov(EBP, ESP);
+        push(XBP);
+        mov(XBP, XSP);
 
         // Load array into EDX
         version (X86_64)
@@ -950,7 +966,7 @@ unittest
         // array[2] -= 10
         sub(bytePtr(ArrayRegister), 10);
 
-        pop(EBP);
+        pop(XBP);
         ret;
     }
 
