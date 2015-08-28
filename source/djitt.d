@@ -608,6 +608,11 @@ struct Block
         return MemoryAccess!32(args);
     }
 
+    MemoryAccess!64 qwordPtr(Args...)(Args args)
+    {
+        return MemoryAccess!64(args);
+    }
+
     void dump()
     {
         this.buffer_.map!(a => "%.2X".format(a)).join(" ").writeln();
