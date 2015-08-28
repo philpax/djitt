@@ -579,6 +579,13 @@ struct Block
         this.emit(ModRM(destination, Reg!Size(2)));
     }
 
+    void call(int Size)(MemoryAccess!Size destination)
+        if (Size >= 32)
+    {
+        this.emit(0xFF);
+        this.emitRegisterMemoryAccess(Reg!Size(2), destination);
+    }
+
     void label(string name)
     {
         this.labels_[name] = this.buffer_.length - 1;
